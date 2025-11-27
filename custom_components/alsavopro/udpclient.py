@@ -1,12 +1,18 @@
+"""Async UDP client for Alsavo Pro devices."""
+
 import asyncio
+import logging
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class UDPClient:
-    """ Async UDP client """
+    """Async UDP client for sending and receiving UDP packets."""
     def __init__(self, server_host, server_port):
         self.server_host = server_host
         self.server_port = server_port
-        self.loop = asyncio.get_event_loop()
+        self.loop = asyncio.get_running_loop()
 
     class SimpleClientProtocol(asyncio.DatagramProtocol):
         # Sending only
@@ -51,9 +57,9 @@ class UDPClient:
         try:
             data = await asyncio.wait_for(future, timeout=5.0)
             return data, b'0'
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError as err:
             _LOGGER.error("Timeout: No response from server in 5 seconds.")
-            return None
+            raise TimeoutError("Alsavo Pro UDP request timed out") from err
         finally:
             transport.close()
 

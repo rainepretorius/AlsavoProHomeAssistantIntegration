@@ -2,10 +2,9 @@
 import logging
 from datetime import timedelta
 
+import asyncio
 import async_timeout
-from homeassistant.helpers.update_coordinator import (
-    DataUpdateCoordinator,
-)
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from homeassistant.const import (
     CONF_PASSWORD,
@@ -36,8 +35,9 @@ async def async_setup_entry(hass, entry):
     password = entry.data.get(CONF_PASSWORD)
 
     data_handler = AlsavoPro(name, serial_no, ip_address, port_no, password)
-    await data_handler.update()
     data_coordinator = AlsavoProDataCoordinator(hass, data_handler)
+
+    await data_coordinator.async_config_entry_first_refresh()
 
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
@@ -50,13 +50,9 @@ async def async_setup_entry(hass, entry):
 
 async def async_unload_entry(hass, config_entry):
     """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_forward_entry_unload(
-        config_entry, "climate"
+    return await hass.config_entries.async_unload_platforms(
+        config_entry, ["climate", "sensor"]
     )
-    unload_ok |= await hass.config_entries.async_forward_entry_unload(
-        config_entry, "sensor"
-    )
-    return unload_ok
 
 
 class AlsavoProDataCoordinator(DataUpdateCoordinator):
@@ -78,5 +74,7 @@ class AlsavoProDataCoordinator(DataUpdateCoordinator):
             async with async_timeout.timeout(10):
                 await self.data_handler.update()
                 return self.data_handler
-        except Exception as ex:
-            _LOGGER.debug("_async_update_data timed out")
+        except asyncio.TimeoutError as err:
+            raise UpdateFailed("Timed out while communicating with Alsavo Pro heater") from err
+        except Exception as err:  # pragma: no cover - best effort logging
+            raise UpdateFailed(f"Unexpected error updating Alsavo Pro heater: {err}") from err

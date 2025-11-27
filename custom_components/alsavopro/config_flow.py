@@ -1,5 +1,6 @@
 """Adds config flow for AlsavoPro pool heater integration."""
 import voluptuous as vol
+
 from homeassistant import config_entries, core, exceptions
 from homeassistant.core import callback
 from homeassistant.const import (
@@ -85,6 +86,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "connection_error"
             except MissingNameValue:
                 errors["base"] = "missing_name"
+            except MissingPasswordValue:
+                errors["base"] = "missing_password"
 
         return self.async_show_form(
             step_id="user",
