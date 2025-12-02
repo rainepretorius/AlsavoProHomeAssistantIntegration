@@ -37,7 +37,8 @@ logger:
 ```
 
 With this configuration in `configuration.yaml`, the Home Assistant log will include the
-connection handshake, query payloads, and parsed samples from the heat pump responses.
+connection handshake, query payloads, and parsed samples from the heat pump responses. You can also download an anonymized
+diagnostics package (three-dots menu on the device) to share recent debug payload summaries without exposing your password.
 
 ## AlsavoCtrl
 This code is very much based on AlsavoCtrl: https://github.com/strandborg/AlsavoCtrl
