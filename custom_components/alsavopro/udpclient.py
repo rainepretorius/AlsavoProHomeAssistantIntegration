@@ -26,26 +26,46 @@ class UDPClient:
             self.transport.close()
 
     class EchoClientProtocol(asyncio.DatagramProtocol):
-        # Send and receive
-        def __init__(self, message, future):
+        """Send a packet and collect every datagram returned within a short window."""
+
+        def __init__(self, message, future, loop, idle_timeout=0.1):
             self.message = message
             self.future = future
+            self.loop = loop
             self.transport = None
+            self.idle_timeout = idle_timeout
+            self._timeout_handle = None
+            self._responses = []
 
         def connection_made(self, transport):
             self.transport = transport
             self.transport.sendto(self.message)
+            self._schedule_finish()
 
         def datagram_received(self, data, addr):
-            self.future.set_result(data)
-            self.transport.close()
+            self._responses.append(data)
+            self._schedule_finish()
 
         def error_received(self, exc):
-            self.future.set_exception(exc)
+            if not self.future.done():
+                self.future.set_exception(exc)
+            if self.transport:
+                self.transport.close()
 
         def connection_lost(self, exc):
             if not self.future.done():
                 self.future.set_exception(ConnectionError("Connection lost"))
+
+        def _schedule_finish(self):
+            if self._timeout_handle:
+                self._timeout_handle.cancel()
+            self._timeout_handle = self.loop.call_later(self.idle_timeout, self._finish)
+
+        def _finish(self):
+            if not self.future.done():
+                self.future.set_result(self._responses)
+            if self.transport:
+                self.transport.close()
 
     async def send_rcv(self, bytes_to_send):
         _LOGGER.debug(
@@ -57,20 +77,26 @@ class UDPClient:
         )
         future = self.loop.create_future()
         transport, protocol = await self.loop.create_datagram_endpoint(
-            lambda: self.EchoClientProtocol(bytes_to_send, future),
+            lambda: self.EchoClientProtocol(bytes_to_send, future, self.loop),
             remote_addr=(self.server_host, self.server_port)
         )
 
         try:
-            data = await asyncio.wait_for(future, timeout=5.0)
+            packets = await asyncio.wait_for(future, timeout=5.0)
+            if len(packets) == 0:
+                raise TimeoutError("Alsavo Pro UDP request received no packets")
             _LOGGER.debug(
-                "Received %s bytes from %s:%s: %s",
-                len(data),
-                self.server_host,
-                self.server_port,
-                data.hex(),
+                "Received %s packet(s) from %s:%s", len(packets), self.server_host, self.server_port
             )
-            return data, b'0'
+            for packet in packets:
+                _LOGGER.debug(
+                    "Received %s bytes from %s:%s: %s",
+                    len(packet),
+                    self.server_host,
+                    self.server_port,
+                    packet.hex(),
+                )
+            return packets
         except asyncio.TimeoutError as err:
             _LOGGER.error("Timeout: No response from server in 5 seconds.")
             raise TimeoutError("Alsavo Pro UDP request timed out") from err

@@ -453,9 +453,14 @@ class AlsavoSocketCom:
 
     async def send_and_receive(self, bytes_to_send):
         _LOGGER.debug("send_and_receive %s bytes", len(bytes_to_send))
-        response = await self.client.send_rcv(bytes_to_send)
-        _LOGGER.debug("Received response tuple with %s bytes", len(response[0]) if response else 0)
-        return response
+        responses = await self.client.send_rcv(bytes_to_send)
+        primary_packet = max(responses, key=len) if responses else None
+        _LOGGER.debug(
+            "Received %s response packet(s); using %s byte packet for parsing",
+            len(responses) if responses else 0,
+            len(primary_packet) if primary_packet else 0,
+        )
+        return primary_packet
 
     async def send(self, bytes_to_send):
         _LOGGER.debug(f"send())")
@@ -464,7 +469,7 @@ class AlsavoSocketCom:
     async def get_auth_challenge(self):
         auth_intro = AuthIntro(self.clientToken, self.serialQ)
         response = await self.send_and_receive(bytes(auth_intro.pack()))
-        return AuthChallenge.unpack(response[0])
+        return AuthChallenge.unpack(response)
 
     async def send_auth_response(self, ctx):
         resp = AuthResponse(self.CSID, self.DSIS, ctx.digest())
@@ -496,9 +501,9 @@ class AlsavoSocketCom:
         if resp is None:
             raise Exception("query_all: no response")
         _LOGGER.debug(
-            "Query response header bytes: %s", resp[0][:16].hex() if resp[0] else None
+            "Query response header bytes: %s", resp[:16].hex() if resp else None
         )
-        return QueryResponse.unpack(resp[0][16:])
+        return QueryResponse.unpack(resp[16:])
 
     async def set_config(self, idx: int, value: int):
         """ Set configuration values on the heat pump """
@@ -548,11 +553,11 @@ class AlsavoSocketCom:
 
         response = await self.send_auth_response(ctx)
 
-        if response is None or response[0].__len__() == 0:
+        if response is None or response.__len__() == 0:
             raise ConnectionError("Server not responding to auth response, disconnecting.")
 
-        act = int.from_bytes(response[0][16:20], byteorder='little')
-        _LOGGER.debug("Auth response action code: %s (raw=%s)", act, response[0].hex())
+        act = int.from_bytes(response[16:20], byteorder='little')
+        _LOGGER.debug("Auth response action code: %s (raw=%s)", act, response.hex())
         if act != 0x00000005:
             raise ConnectionError("Server returned error in auth, disconnecting")
 
