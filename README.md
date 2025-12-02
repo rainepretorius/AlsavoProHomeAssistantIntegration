@@ -25,5 +25,19 @@ Ip-address and port can be one of two:
 - If you want to use the cloud, set IP-address to 47.254.157.150 and port to 51192.
 - If you want to bypass the cloud, enter the heat pumps ip-address and use port 1194.
 
+## Debug logging
+Enable debug logging in Home Assistant to capture the raw UDP traffic and parsed payloads. You can toggle this from the
+integration's options ("Enable debug logging") or by configuring the logger directly:
+
+```yaml
+logger:
+  default: info
+  logs:
+    custom_components.alsavopro: debug
+```
+
+With this configuration in `configuration.yaml`, the Home Assistant log will include the
+connection handshake, query payloads, and parsed samples from the heat pump responses.
+
 ## AlsavoCtrl
 This code is very much based on AlsavoCtrl: https://github.com/strandborg/AlsavoCtrl
