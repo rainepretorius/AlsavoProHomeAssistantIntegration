@@ -86,6 +86,20 @@ class AlsavoPro:
     def unique_id(self):
         return f"{self._name}_{self._serial_no}"
 
+    def diagnostic_data(self):
+        """Return a structured view of the latest values for diagnostics."""
+
+        return {
+            "name": self._name,
+            "serial_no": self._serial_no,
+            "ip_address": self._ip_address,
+            "port": self._port_no,
+            "online": self._online,
+            "update_retries": self._update_retries,
+            "set_retries": self._set_retries,
+            "latest_payload": self._data.debug_summary(),
+        }
+
     @property
     def target_temperature(self):
         return self.get_temperature_from_config(MODE_TO_CONFIG.get(self.operating_mode, 0))

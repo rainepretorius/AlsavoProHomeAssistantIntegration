@@ -17,5 +17,16 @@
         }
       }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "password": "Password",
+          "enable_debug_logging": "Enable debug logging"
+        },
+        "description": "Toggle debug logging to capture raw UDP traffic and parsed payloads."
+      }
+    }
   }
 }
