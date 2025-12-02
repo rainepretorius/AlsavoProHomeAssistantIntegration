@@ -40,6 +40,7 @@ class AlsavoPro:
                 data = await self._session.query_all()
                 if data is not None:
                     self._data = data
+                    _LOGGER.debug("Received data payload: %s", data.debug_summary())
                 self._online = True
                 self._update_retries = 0
                 return
@@ -79,7 +80,7 @@ class AlsavoPro:
 
     @property
     def is_online(self) -> bool:
-        return self._data.parts > 0
+        return self._online
 
     @property
     def unique_id(self):
@@ -370,6 +371,26 @@ class QueryResponse:
     def get_config_temperature_value(self, idx: int):
         return self.get_signed_config_value(idx) / 10
 
+    def debug_summary(self):
+        def _payload_summary(payload):
+            if payload is None:
+                return None
+            values = list(payload.data)
+            return {
+                "start_idx": payload.startIdx,
+                "count": len(values),
+                "indices": payload.indices,
+                "sample": values[:10],
+            }
+
+        return {
+            "action": self.action,
+            "parts": self.parts,
+            "status": _payload_summary(self.__status),
+            "config": _payload_summary(self.__config),
+            "device_info": _payload_summary(self.__deviceInfo),
+        }
+
     @staticmethod
     def unpack(data):
         unpacked_data = struct.unpack('!BBH', data[0:4])
@@ -417,9 +438,9 @@ class AlsavoSocketCom:
         self.client = None
 
     async def send_and_receive(self, bytes_to_send):
-        _LOGGER.debug(f"send_and_receive())")
+        _LOGGER.debug("send_and_receive %s bytes", len(bytes_to_send))
         response = await self.client.send_rcv(bytes_to_send)
-        _LOGGER.debug(f"Received response")
+        _LOGGER.debug("Received response tuple with %s bytes", len(response[0]) if response else 0)
         return response
 
     async def send(self, bytes_to_send):
@@ -436,7 +457,12 @@ class AlsavoSocketCom:
         return await self.send_and_receive(resp.pack())
 
     async def send_and_rcv_packet(self, payload: bytes, cmd=0xf4):
-        _LOGGER.debug(f"send_and_rcv_packet(payload, {cmd})")
+        _LOGGER.debug(
+            "send_and_rcv_packet(cmd=%s, payload_len=%s, payload=%s)",
+            hex(cmd),
+            len(payload),
+            payload.hex(),
+        )
         if self.CSID is not None and self.DSIS is not None:
             return await self.send_and_receive(
                 PacketHeader(0x32, 0, self.CSID, self.DSIS, cmd, payload.__len__()).pack() + payload
@@ -455,6 +481,9 @@ class AlsavoSocketCom:
         self.lstConfigReqTime = datetime.now()
         if resp is None:
             raise Exception("query_all: no response")
+        _LOGGER.debug(
+            "Query response header bytes: %s", resp[0][:16].hex() if resp[0] else None
+        )
         return QueryResponse.unpack(resp[0][16:])
 
     async def set_config(self, idx: int, value: int):
@@ -467,14 +496,16 @@ class AlsavoSocketCom:
         await self.send_packet(b'\x09\x01\x00\x00\x00\x02\x00\x2e\x00\x02\x00\x04' + idx_h + idx_l + val_h + val_l)
 
     async def connect(self, server_ip, server_port, serial, password):
-        _LOGGER.debug("Connecting to Alsavo Pro")
+        _LOGGER.debug(
+            "Connecting to Alsavo Pro at %s:%s (serial=%s)", server_ip, server_port, serial
+        )
 
         self.clientToken = random.randint(0, 65535)
         self.serialQ = serial
         self.password = password
         self.client = UDPClient(server_ip, server_port)
 
-        _LOGGER.debug("Asking for auth challenge")
+        _LOGGER.debug("Asking for auth challenge with client token %s", self.clientToken)
         auth_challenge = await self.get_auth_challenge()
 
         if not auth_challenge.is_authorized:
@@ -484,8 +515,17 @@ class AlsavoSocketCom:
         self.DSIS = auth_challenge.hdr.dsid
         self.serverToken = auth_challenge.serverToken
 
-        _LOGGER.debug(f"Received handshake, CSID={hex(self.CSID)}, DSID={hex(self.DSIS)}, "
-                      f"server token {hex(self.serverToken)}")
+        _LOGGER.debug(
+            "Received handshake header=%s, CSID=%s, DSID=%s, server token=%s",
+            {
+                "hdr": hex(auth_challenge.hdr.hdr),
+                "seq": auth_challenge.hdr.seq,
+                "cmd": hex(auth_challenge.hdr.cmd),
+            },
+            hex(self.CSID),
+            hex(self.DSIS),
+            hex(self.serverToken),
+        )
 
         ctx = hashlib.md5()
         ctx.update(self.clientToken.to_bytes(4, "big"))
@@ -498,6 +538,7 @@ class AlsavoSocketCom:
             raise ConnectionError("Server not responding to auth response, disconnecting.")
 
         act = int.from_bytes(response[0][16:20], byteorder='little')
+        _LOGGER.debug("Auth response action code: %s (raw=%s)", act, response[0].hex())
         if act != 0x00000005:
             raise ConnectionError("Server returned error in auth, disconnecting")
 

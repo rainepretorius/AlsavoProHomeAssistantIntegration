@@ -7,13 +7,10 @@ from homeassistant.const import (
     CONF_PASSWORD,
     CONF_NAME,
     CONF_IP_ADDRESS,
-    CONF_PORT
+    CONF_PORT,
 )
 
-from .const import (
-    SERIAL_NO,
-    DOMAIN
-)
+from .const import DOMAIN, SERIAL_NO, CONF_ENABLE_DEBUG_LOGGING
 
 # _LOGGER = logging.getLogger(__name__)
 
@@ -97,12 +94,25 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
+    def __init__(self, config_entry):
+        self.config_entry = config_entry
+
     async def async_step_init(self, user_input=None):
+        if user_input is not None:
+            options = {**self.config_entry.options, **user_input}
+            return self.async_create_entry(title="", data=options)
+
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema({
-                vol.Optional(CONF_PASSWORD): str,
-            }),
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_PASSWORD, default=self.config_entry.data.get(CONF_PASSWORD, "")): str,
+                    vol.Optional(
+                        CONF_ENABLE_DEBUG_LOGGING,
+                        default=self.config_entry.options.get(CONF_ENABLE_DEBUG_LOGGING, False),
+                    ): bool,
+                }
+            ),
         )
 
 

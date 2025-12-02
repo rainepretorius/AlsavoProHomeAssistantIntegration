@@ -48,6 +48,13 @@ class UDPClient:
                 self.future.set_exception(ConnectionError("Connection lost"))
 
     async def send_rcv(self, bytes_to_send):
+        _LOGGER.debug(
+            "Sending %s bytes to %s:%s: %s",
+            len(bytes_to_send),
+            self.server_host,
+            self.server_port,
+            bytes_to_send.hex(),
+        )
         future = self.loop.create_future()
         transport, protocol = await self.loop.create_datagram_endpoint(
             lambda: self.EchoClientProtocol(bytes_to_send, future),
@@ -56,6 +63,13 @@ class UDPClient:
 
         try:
             data = await asyncio.wait_for(future, timeout=5.0)
+            _LOGGER.debug(
+                "Received %s bytes from %s:%s: %s",
+                len(data),
+                self.server_host,
+                self.server_port,
+                data.hex(),
+            )
             return data, b'0'
         except asyncio.TimeoutError as err:
             _LOGGER.error("Timeout: No response from server in 5 seconds.")

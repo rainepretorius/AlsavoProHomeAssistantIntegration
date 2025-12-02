@@ -14,10 +14,7 @@ from homeassistant.const import (
 )
 
 from .AlsavoPyCtrl import AlsavoPro
-from .const import (
-    DOMAIN,
-    SERIAL_NO,
-)
+from .const import DOMAIN, SERIAL_NO, CONF_ENABLE_DEBUG_LOGGING
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,6 +25,10 @@ async def async_setup(hass, config):
 
 async def async_setup_entry(hass, entry):
     """Set up the Alsavo Pro heater."""
+    if entry.options.get(CONF_ENABLE_DEBUG_LOGGING):
+        logging.getLogger(__package__).setLevel(logging.DEBUG)
+        _LOGGER.debug("Debug logging enabled via integration options")
+
     name = entry.data.get(CONF_NAME)
     serial_no = entry.data.get(SERIAL_NO)
     ip_address = entry.data.get(CONF_IP_ADDRESS)

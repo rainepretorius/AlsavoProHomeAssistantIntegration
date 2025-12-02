@@ -2,6 +2,7 @@
 
 SERIAL_NO = "serial_no"
 DOMAIN = "alsavopro"
+CONF_ENABLE_DEBUG_LOGGING = "enable_debug_logging"
 
 POWER_MODE_MAP = {
     0: 'Silent',
