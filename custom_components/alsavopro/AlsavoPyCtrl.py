@@ -1,9 +1,11 @@
+import asyncio
 import hashlib
 import logging
 import random
 import struct
 from datetime import datetime, timezone
 from enum import Enum
+
 from custom_components.alsavopro.const import MODE_TO_CONFIG, NO_WATER_FLUX, WATER_TEMP_TOO_LOW, MAX_UPDATE_RETRIES, \
      MAX_SET_CONFIG_RETRIES
 from .udpclient import UDPClient
@@ -29,35 +31,51 @@ class AlsavoPro:
 
     async def update(self):
         _LOGGER.debug(f"update")
-        try:
-            await self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
-            data = await self._session.query_all()
-            if data is not None:
-                self._data = data
-        except Exception as e:
-            if self._update_retries < MAX_UPDATE_RETRIES:
-                self._update_retries += 1
-                await self.update()
+        last_error = None
+        for attempt in range(1, MAX_UPDATE_RETRIES + 1):
+            try:
+                await self._session.connect(
+                    self._ip_address, int(self._port_no), int(self._serial_no), self._password
+                )
+                data = await self._session.query_all()
+                if data is not None:
+                    self._data = data
                 self._online = True
-            else:
                 self._update_retries = 0
-                _LOGGER.error(f"Unable to update: {e}")
-                self._online = False
+                return
+            except Exception as err:  # pragma: no cover - requires networked device
+                last_error = err
+                self._update_retries = attempt
+                _LOGGER.warning("Update attempt %s failed: %s", attempt, err)
+                await asyncio.sleep(0)
+
+        self._update_retries = 0
+        self._online = False
+        _LOGGER.error("Unable to update after %s attempts: %s", MAX_UPDATE_RETRIES, last_error)
+        raise ConnectionError("Failed to refresh Alsavo Pro data") from last_error
 
     async def set_config(self, idx: int, value: int):
         _LOGGER.debug(f"set_config({idx}, {value})")
-        try:
-            await self._session.connect(self._ip_address, int(self._port_no), int(self._serial_no), self._password)
-            await self._session.set_config(idx, value)
-        except Exception as e:
-            if self._set_retries < MAX_SET_CONFIG_RETRIES:
-                self._set_retries += 1
-                await self.set_config(idx, value)
+        last_error = None
+        for attempt in range(1, MAX_SET_CONFIG_RETRIES + 1):
+            try:
+                await self._session.connect(
+                    self._ip_address, int(self._port_no), int(self._serial_no), self._password
+                )
+                await self._session.set_config(idx, value)
                 self._online = True
-            else:
                 self._set_retries = 0
-                _LOGGER.error(f"Unable to set config: {idx}, {value} Error: {e}")
-                self._online = False
+                return
+            except Exception as err:  # pragma: no cover - requires networked device
+                last_error = err
+                self._set_retries = attempt
+                _LOGGER.warning("Set config attempt %s failed: %s", attempt, err)
+                await asyncio.sleep(0)
+
+        self._set_retries = 0
+        self._online = False
+        _LOGGER.error("Unable to set config %s to %s after %s attempts: %s", idx, value, MAX_SET_CONFIG_RETRIES, last_error)
+        raise ConnectionError(f"Failed to set config {idx}") from last_error
 
     @property
     def is_online(self) -> bool:
