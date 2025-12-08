@@ -72,7 +72,7 @@ class AlsavoProDataCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         _LOGGER.debug("_async_update_data")
         try:
-            async with async_timeout.timeout(10):
+            async with async_timeout.timeout(30):
                 await self.data_handler.update()
                 return self.data_handler
         except asyncio.TimeoutError as err:

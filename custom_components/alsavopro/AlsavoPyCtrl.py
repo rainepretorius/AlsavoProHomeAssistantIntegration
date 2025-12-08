@@ -512,7 +512,15 @@ class AlsavoSocketCom:
         _LOGGER.debug(
             "Query response header bytes: %s", resp[:16].hex() if resp else None
         )
-        return QueryResponse.unpack(resp[16:])
+        response = QueryResponse.unpack(resp[16:])
+        if not response.has_payload():
+            _LOGGER.debug(
+                "Empty payload returned (action=%s, parts=%s); raw packet: %s",
+                response.action,
+                response.parts,
+                resp.hex(),
+            )
+        return response
 
     async def set_config(self, idx: int, value: int):
         """ Set configuration values on the heat pump """
@@ -531,7 +539,15 @@ class AlsavoSocketCom:
         self.clientToken = random.randint(0, 65535)
         self.serialQ = serial
         self.password = password
-        self.client = UDPClient(server_ip, server_port)
+        # Use generous UDP windows to cope with devices that respond slowly or
+        # split replies across multiple packets.
+        self.client = UDPClient(
+            server_ip,
+            server_port,
+            idle_timeout=2.5,
+            request_timeout=12.0,
+            max_attempts=3,
+        )
 
         _LOGGER.debug("Asking for auth challenge with client token %s", self.clientToken)
         auth_challenge = await self.get_auth_challenge()
