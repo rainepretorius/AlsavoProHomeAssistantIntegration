@@ -87,27 +87,59 @@ class UDPClient:
             remote_addr=(self.server_host, self.server_port)
         )
 
-        try:
-            packets = await asyncio.wait_for(future, timeout=5.0)
-            if len(packets) == 0:
-                raise TimeoutError("Alsavo Pro UDP request received no packets")
-            _LOGGER.debug(
-                "Received %s packet(s) from %s:%s", len(packets), self.server_host, self.server_port
+        last_error: Exception | None = None
+        for attempt in range(1, self.max_attempts + 1):
+            attempt_timeout = min(self.request_timeout * attempt, self.request_timeout * 2)
+            future = self.loop.create_future()
+            transport, protocol = await self.loop.create_datagram_endpoint(
+                lambda: self.EchoClientProtocol(
+                    bytes_to_send,
+                    future,
+                    self.loop,
+                    idle_timeout=self.idle_timeout,
+                ),
+                remote_addr=(self.server_host, self.server_port)
             )
-            for packet in packets:
+
+            try:
+                packets = await asyncio.wait_for(future, timeout=attempt_timeout)
+                if len(packets) == 0:
+                    raise TimeoutError("Alsavo Pro UDP request received no packets")
                 _LOGGER.debug(
-                    "Received %s bytes from %s:%s: %s",
-                    len(packet),
-                    self.server_host,
-                    self.server_port,
-                    packet.hex(),
+                    "Received %s packet(s) from %s:%s", len(packets), self.server_host, self.server_port
                 )
-            return packets
-        except asyncio.TimeoutError as err:
-            _LOGGER.error("Timeout: No response from server in 5 seconds.")
-            raise TimeoutError("Alsavo Pro UDP request timed out") from err
-        finally:
-            transport.close()
+                for packet in packets:
+                    _LOGGER.debug(
+                        "Received %s bytes from %s:%s: %s",
+                        len(packet),
+                        self.server_host,
+                        self.server_port,
+                        packet.hex(),
+                    )
+                return packets
+            except asyncio.TimeoutError as err:
+                last_error = err
+                _LOGGER.warning(
+                    "UDP attempt %s/%s timed out waiting %.1fs for response; %s",
+                    attempt,
+                    self.max_attempts,
+                    attempt_timeout,
+                    "retrying" if attempt < self.max_attempts else "giving up",
+                )
+            except TimeoutError as err:
+                last_error = err
+                _LOGGER.warning(
+                    "UDP attempt %s/%s returned no packets; %s",
+                    attempt,
+                    self.max_attempts,
+                    "retrying" if attempt < self.max_attempts else "giving up",
+                )
+            finally:
+                transport.close()
+
+            await asyncio.sleep(0.05)
+
+        raise TimeoutError("Alsavo Pro UDP request timed out") from last_error
 
     async def send(self, bytes_to_send):
         transport, protocol = await self.loop.create_datagram_endpoint(
