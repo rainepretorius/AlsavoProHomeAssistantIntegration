@@ -40,5 +40,26 @@ With this configuration in `configuration.yaml`, the Home Assistant log will inc
 connection handshake, query payloads, and parsed samples from the heat pump responses. You can also download an anonymized
 diagnostics package (three-dots menu on the device) to share recent debug payload summaries without exposing your password.
 
+### Connected but no data shows up
+If the log shows a successful handshake and `Auth response action code: 5` but the `query_all` response is
+`{"action": 7, "parts": 0, "status": null, "config": null, "device_info": null}`, the pump is replying without
+any payload. This leaves the entities with nothing to display. In that case:
+
+1. Keep debug logging enabled and capture a fresh log snippet that includes the full hex line beginning with
+   `Received 20 bytes` (or similar) so we can inspect the raw packet.
+2. Verify the pump’s firmware is up to date and that UDP/port 1194 traffic is not being filtered (or 51192 if you use the cloud IP).
+3. Retry after power-cycling the pump and Home Assistant. If the payload remains empty, share the log and device model so we can
+   add a fallback parser for your firmware variant.
+
+### How to enable debug logs from the UI
+1. In Home Assistant, go to **Settings → System → Logs**.
+2. Click the **three dots** in the top right and select **Enable debug logging**.
+3. Type `custom_components.alsavopro` as the logger name and confirm. The setting is temporary and resets after a restart.
+
+### How to download the logs
+* From the same **Settings → System → Logs** page, use the **Download logs** button to save the current `home-assistant.log`.
+* You can also retrieve the file directly from `/config/home-assistant.log` via Samba, SSH, or the File Editor add-on if you
+  prefer to collect it manually.
+
 ## AlsavoCtrl
 This code is very much based on AlsavoCtrl: https://github.com/strandborg/AlsavoCtrl

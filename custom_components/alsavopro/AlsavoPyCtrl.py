@@ -39,6 +39,10 @@ class AlsavoPro:
                 )
                 data = await self._session.query_all()
                 if data is not None:
+                    if not data.has_payload():
+                        raise ValueError(
+                            f"Received empty payload (action={data.action}, parts={data.parts})"
+                        )
                     self._data = data
                     _LOGGER.debug("Received data payload: %s", data.debug_summary())
                 self._online = True
@@ -384,6 +388,11 @@ class QueryResponse:
 
     def get_config_temperature_value(self, idx: int):
         return self.get_signed_config_value(idx) / 10
+
+    def has_payload(self) -> bool:
+        """Return True when any payload section is present."""
+
+        return any((self.__status, self.__config, self.__deviceInfo))
 
     def debug_summary(self):
         def _payload_summary(payload):
