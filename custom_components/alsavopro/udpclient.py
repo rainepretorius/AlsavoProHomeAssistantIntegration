@@ -9,10 +9,11 @@ _LOGGER = logging.getLogger(__name__)
 
 class UDPClient:
     """Async UDP client for sending and receiving UDP packets."""
-    def __init__(self, server_host, server_port):
+    def __init__(self, server_host, server_port, idle_timeout: float = 0.3):
         self.server_host = server_host
         self.server_port = server_port
         self.loop = asyncio.get_running_loop()
+        self.idle_timeout = idle_timeout
 
     class SimpleClientProtocol(asyncio.DatagramProtocol):
         # Sending only
@@ -28,7 +29,7 @@ class UDPClient:
     class EchoClientProtocol(asyncio.DatagramProtocol):
         """Send a packet and collect every datagram returned within a short window."""
 
-        def __init__(self, message, future, loop, idle_timeout=0.1):
+        def __init__(self, message, future, loop, idle_timeout=0.3):
             self.message = message
             self.future = future
             self.loop = loop
@@ -77,7 +78,12 @@ class UDPClient:
         )
         future = self.loop.create_future()
         transport, protocol = await self.loop.create_datagram_endpoint(
-            lambda: self.EchoClientProtocol(bytes_to_send, future, self.loop),
+            lambda: self.EchoClientProtocol(
+                bytes_to_send,
+                future,
+                self.loop,
+                idle_timeout=self.idle_timeout,
+            ),
             remote_addr=(self.server_host, self.server_port)
         )
 

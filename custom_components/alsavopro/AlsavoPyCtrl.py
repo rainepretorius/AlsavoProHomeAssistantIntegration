@@ -512,7 +512,15 @@ class AlsavoSocketCom:
         _LOGGER.debug(
             "Query response header bytes: %s", resp[:16].hex() if resp else None
         )
-        return QueryResponse.unpack(resp[16:])
+        response = QueryResponse.unpack(resp[16:])
+        if not response.has_payload():
+            _LOGGER.debug(
+                "Empty payload returned (action=%s, parts=%s); raw packet: %s",
+                response.action,
+                response.parts,
+                resp.hex(),
+            )
+        return response
 
     async def set_config(self, idx: int, value: int):
         """ Set configuration values on the heat pump """
