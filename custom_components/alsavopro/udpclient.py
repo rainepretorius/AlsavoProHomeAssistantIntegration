@@ -9,21 +9,11 @@ _LOGGER = logging.getLogger(__name__)
 
 class UDPClient:
     """Async UDP client for sending and receiving UDP packets."""
-
-    def __init__(
-        self,
-        server_host,
-        server_port,
-        idle_timeout: float = 1.0,
-        request_timeout: float = 8.0,
-        max_attempts: int = 3,
-    ):
+    def __init__(self, server_host, server_port, idle_timeout: float = 0.3):
         self.server_host = server_host
         self.server_port = server_port
         self.loop = asyncio.get_running_loop()
         self.idle_timeout = idle_timeout
-        self.request_timeout = request_timeout
-        self.max_attempts = max_attempts
 
     class SimpleClientProtocol(asyncio.DatagramProtocol):
         # Sending only
@@ -39,7 +29,7 @@ class UDPClient:
     class EchoClientProtocol(asyncio.DatagramProtocol):
         """Send a packet and collect every datagram returned within a short window."""
 
-        def __init__(self, message, future, loop, idle_timeout=1.0):
+        def __init__(self, message, future, loop, idle_timeout=0.3):
             self.message = message
             self.future = future
             self.loop = loop
@@ -85,6 +75,16 @@ class UDPClient:
             self.server_host,
             self.server_port,
             bytes_to_send.hex(),
+        )
+        future = self.loop.create_future()
+        transport, protocol = await self.loop.create_datagram_endpoint(
+            lambda: self.EchoClientProtocol(
+                bytes_to_send,
+                future,
+                self.loop,
+                idle_timeout=self.idle_timeout,
+            ),
+            remote_addr=(self.server_host, self.server_port)
         )
 
         last_error: Exception | None = None
