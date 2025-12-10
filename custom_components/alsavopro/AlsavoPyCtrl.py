@@ -463,11 +463,19 @@ class AlsavoSocketCom:
     async def send_and_receive(self, bytes_to_send):
         _LOGGER.debug("send_and_receive %s bytes", len(bytes_to_send))
         responses = await self.client.send_rcv(bytes_to_send)
-        primary_packet = max(responses, key=len) if responses else None
+        if not responses:
+            _LOGGER.debug("Received no response packets")
+            return None
+
+        merged = bytearray(responses[0])
+        for extra in responses[1:]:
+            merged.extend(extra[16:])
+
+        primary_packet = bytes(merged)
         _LOGGER.debug(
-            "Received %s response packet(s); using %s byte packet for parsing",
-            len(responses) if responses else 0,
-            len(primary_packet) if primary_packet else 0,
+            "Received %s response packet(s); merged payload into %s bytes for parsing",
+            len(responses),
+            len(primary_packet),
         )
         return primary_packet
 
