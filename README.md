@@ -61,5 +61,19 @@ any payload. This leaves the entities with nothing to display. In that case:
 * You can also retrieve the file directly from `/config/home-assistant.log` via Samba, SSH, or the File Editor add-on if you
   prefer to collect it manually.
 
+## Standalone connection probe
+
+If you want to validate connectivity outside of Home Assistant (for example on a Windows PC before configuring HA), run the bundled probe script:
+
+1. Install Python 3.11+ on the target machine.
+2. Download or clone this repository and open a terminal in the repository root.
+3. Run the probe with your pump details:
+
+   ```bash
+   python tools/alsavopro_probe.py --host 10.1.1.104 --port 1194 --serial 824500039548 --password YOUR_PASSWORD
+   ```
+
+The script will perform the UDP handshake, request the `query_all` payload, and print a concise summary of the returned data. Use `--debug` to see raw packet hex dumps while troubleshooting.
+
 ## AlsavoCtrl
 This code is very much based on AlsavoCtrl: https://github.com/strandborg/AlsavoCtrl
