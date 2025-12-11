@@ -9,11 +9,21 @@ _LOGGER = logging.getLogger(__name__)
 
 class UDPClient:
     """Async UDP client for sending and receiving UDP packets."""
-    def __init__(self, server_host, server_port, idle_timeout: float = 0.3):
+    def __init__(
+        self,
+        server_host,
+        server_port,
+        *,
+        idle_timeout: float = 0.3,
+        request_timeout: float = 3.0,
+        max_attempts: int = 3,
+    ):
         self.server_host = server_host
         self.server_port = server_port
         self.loop = asyncio.get_running_loop()
         self.idle_timeout = idle_timeout
+        self.request_timeout = request_timeout
+        self.max_attempts = max_attempts
 
     class SimpleClientProtocol(asyncio.DatagramProtocol):
         # Sending only
@@ -76,17 +86,6 @@ class UDPClient:
             self.server_port,
             bytes_to_send.hex(),
         )
-        future = self.loop.create_future()
-        transport, protocol = await self.loop.create_datagram_endpoint(
-            lambda: self.EchoClientProtocol(
-                bytes_to_send,
-                future,
-                self.loop,
-                idle_timeout=self.idle_timeout,
-            ),
-            remote_addr=(self.server_host, self.server_port)
-        )
-
         last_error: Exception | None = None
         for attempt in range(1, self.max_attempts + 1):
             attempt_timeout = min(self.request_timeout * attempt, self.request_timeout * 2)
@@ -139,7 +138,9 @@ class UDPClient:
 
             await asyncio.sleep(0.05)
 
-        raise TimeoutError("Alsavo Pro UDP request timed out") from last_error
+        raise TimeoutError(
+            f"Alsavo Pro UDP request timed out after {self.max_attempts} attempts"
+        ) from last_error
 
     async def send(self, bytes_to_send):
         transport, protocol = await self.loop.create_datagram_endpoint(
